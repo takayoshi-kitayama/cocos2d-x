@@ -25,9 +25,18 @@ THE SOFTWARE.
 #ifndef __UIHELPER_H__
 #define __UIHELPER_H__
 
+#include <string>
+#include "base/CCPlatformMacros.h"
+
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_OHOS)
+#include "CCSprite.h"
+#endif
+
 NS_CC_BEGIN
 
 namespace ui {
+        
+    class Widget;
 
 /**
 *   @js NA
@@ -60,6 +69,17 @@ public:
     
     /*temp action*/
     static Widget* seekActionWidgetByActionTag(Widget* root, int tag);
+    
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_OHOS)
+    /**
+     *@brief Convert a node's boundingBox rect into screen coordinates.
+     *
+     * @param node Any node pointer.
+     *
+     * @return A Rect in screen coordinates.
+     */
+    static Rect convertBoundingBoxToScreen(Node* node);
+#endif 
 };
 }
 

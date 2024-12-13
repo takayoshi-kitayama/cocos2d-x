@@ -250,9 +250,9 @@ void TextFieldTTFDefaultTest::onEnter()
     // add TextFieldTTF
     auto s = Director::getInstance()->getWinSize();
 
-    auto pTextField = TextFieldTTF::textFieldWithPlaceHolder("<click here for input>",
-        FONT_NAME,
-        FONT_SIZE);
+    auto  pTextField = TextFieldTTF::textFieldWithPlaceHolder("<click here for input>", FONT_NAME, FONT_SIZE);
+
+
     addChild(pTextField);
 
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)    

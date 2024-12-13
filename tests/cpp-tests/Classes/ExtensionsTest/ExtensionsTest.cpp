@@ -3,7 +3,7 @@
 #include "NotificationCenterTest/NotificationCenterTest.h"
 #include "ControlExtensionTest/CCControlSceneManager.h"
 #include "CocosBuilderTest/CocosBuilderTest.h"
-#if (CC_TARGET_PLATFORM != CC_PLATFORM_EMSCRIPTEN) && (CC_TARGET_PLATFORM != CC_PLATFORM_NACL) && (CC_TARGET_PLATFORM != CC_PLATFORM_WP8) && (CC_TARGET_PLATFORM != CC_PLATFORM_WINRT)
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_EMSCRIPTEN) && (CC_TARGET_PLATFORM != CC_PLATFORM_NACL) && (CC_TARGET_PLATFORM != CC_PLATFORM_WINRT)
 #include "NetworkTest/HttpClientTest.h"
 #endif
 #include "TableViewTest/TableViewTestScene.h"
@@ -11,17 +11,22 @@
 #include "CocoStudioArmatureTest/ArmatureScene.h"
 #include "CocoStudioComponentsTest/ComponentsTestScene.h"
 #include "CocoStudioSceneTest/SceneEditorTest.h"
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_OHOS)
 #include "CocoStudioGUITest/CocoStudioGUITest.h"
+#endif
 
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_OHOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
 #include "NetworkTest/WebSocketTest.h"
 #include "NetworkTest/SocketIOTest.h"
 #endif
 
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32) || (CC_TARGET_PLATFORM == CC_PLATFORM_TIZEN) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_OHOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32) || (CC_TARGET_PLATFORM == CC_PLATFORM_TIZEN) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
 #include "EditBoxTest/EditBoxTest.h"
 #endif
-
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_OHOS)
+#include "WebViewTest/WebViewTest.h"
+#include "VideoPlayerTest/VideoPlayerTest.h"
+#endif
 #include "Scale9SpriteTest/Scale9SpriteTest.h"
 
 enum
@@ -58,18 +63,24 @@ static struct {
 			scene->release();
 		}
 	}},
-#if (CC_TARGET_PLATFORM != CC_PLATFORM_EMSCRIPTEN) && (CC_TARGET_PLATFORM != CC_PLATFORM_NACL) && (CC_TARGET_PLATFORM != CC_PLATFORM_WP8) && (CC_TARGET_PLATFORM != CC_PLATFORM_WINRT)
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_EMSCRIPTEN) && (CC_TARGET_PLATFORM != CC_PLATFORM_NACL) && (CC_TARGET_PLATFORM != CC_PLATFORM_WINRT)
 	{ "HttpClientTest", [](Ref *sender){ runHttpClientTest();}
 	},
 #endif
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
 	{ "WebSocketTest", [](Ref *sender){ runWebSocketTest();}
 	},
 	{ "SocketIOTest", [](Ref *sender){ runSocketIOTest();}
 	},
 #endif
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32) || (CC_TARGET_PLATFORM == CC_PLATFORM_TIZEN) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_OHOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_IOS) || (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID) || (CC_TARGET_PLATFORM == CC_PLATFORM_MAC) || (CC_TARGET_PLATFORM == CC_PLATFORM_WIN32) || (CC_TARGET_PLATFORM == CC_PLATFORM_TIZEN) || (CC_TARGET_PLATFORM == CC_PLATFORM_WP8)
 	{ "EditBoxTest", [](Ref *sender){ runEditBoxTest();}
+	},
+#endif
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_OHOS)
+    { "WebViewTest", [](Ref *sender){ runWebViewTest();}
+	},
+    { "VideoPlayerTest", [](Ref *sender){ runVideoPlayerTest();}
 	},
 #endif
 	{ "TableViewTest", [](Ref *sender){ runTableViewTest();}
@@ -86,6 +97,7 @@ static struct {
 	                                       scene->release();
  }
 	},
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_OHOS)
     { "CocoStudioGUITest", [](Ref *sender)
         {
             CocoStudioGUITestScene* pScene = new CocoStudioGUITestScene();
@@ -93,6 +105,7 @@ static struct {
             pScene->release();
         }
 	},
+#endif
 };
 
 static const int g_maxTests = sizeof(g_extensionsTests) / sizeof(g_extensionsTests[0]);
@@ -110,16 +123,22 @@ void ExtensionsMainLayer::onEnter()
     
     auto s = Director::getInstance()->getWinSize();
     
-    _itemMenu = Menu::create();
-    _itemMenu->setPosition( Point::ZERO );
-    MenuItemFont::setFontName("fonts/arial.ttf");
-    MenuItemFont::setFontSize(24);
+     TTFConfig ttfConfig("fonts/arial.ttf", 24);
+     _itemMenu = Menu::create();
     for (int i = 0; i < g_maxTests; ++i)
     {
-        auto pItem = MenuItemFont::create(g_extensionsTests[i].name, g_extensionsTests[i].callback);
-        pItem->setPosition(Point(s.width / 2, s.height - (i + 1) * LINE_SPACE));
-        _itemMenu->addChild(pItem, kItemTagBasic + i);
+        auto label = Label::createWithTTF(ttfConfig, g_extensionsTests[i].name);       
+        auto menuItem = MenuItemLabel::create(label, g_extensionsTests[i].callback);
+
+        _itemMenu->addChild(menuItem, i + 10000);
+        menuItem->setPosition( Point( VisibleRect::center().x, (VisibleRect::top().y - (i + 1) * LINE_SPACE) ));
     }
+
+    _itemMenu->setContentSize(Size(VisibleRect::getVisibleRect().size.width, (g_maxTests + 1) * (LINE_SPACE)));
+    _itemMenu->setPosition(s_tCurPos);
+    addChild(_itemMenu);
+
+  
 
     auto listener = EventListenerTouchAllAtOnce::create();
     listener->onTouchesBegan = CC_CALLBACK_2(ExtensionsMainLayer::onTouchesBegan, this);
