@@ -32,37 +32,29 @@
 CC_BACKEND_BEGIN
 
 namespace {
-    GLenum toGLUsage(const BufferUsage& usage)
-    {
-        switch (usage)
-        {
-            case BufferUsage::STATIC:
-                return GL_STATIC_DRAW;
-            case BufferUsage::DYNAMIC:
-                return GL_DYNAMIC_DRAW;
-            default:
-                return GL_DYNAMIC_DRAW;
-        }
+    GLenum toGLUsage(const BufferUsage& usage) {
+        return (usage == BufferUsage::STATIC) ? GL_STATIC_DRAW : GL_DYNAMIC_DRAW;
     }
 }
 
 BufferGL::BufferGL(std::size_t size, BufferType type, BufferUsage usage)
-: Buffer(size, type, usage)
+    : Buffer(size, type, usage), _buffer(0), _data(nullptr), _bufferAllocated(0)
 {
     glGenBuffers(1, &_buffer);
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
-    _backToForegroundListener = EventListenerCustom::create(EVENT_RENDERER_RECREATED, [this](EventCustom*){
+    _backToForegroundListener = EventListenerCustom::create(EVENT_RENDERER_RECREATED, [this](EventCustom*) {
         this->reloadBuffer();
     });
     Director::getInstance()->getEventDispatcher()->addEventListenerWithFixedPriority(_backToForegroundListener, -1);
 #endif
 }
 
-BufferGL::~BufferGL()
-{
-    if (_buffer)
+BufferGL::~BufferGL() {
+    if (_buffer) {
         glDeleteBuffers(1, &_buffer);
+        _buffer = 0;
+    }
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     CC_SAFE_DELETE_ARRAY(_data);
@@ -70,57 +62,46 @@ BufferGL::~BufferGL()
 #endif
 }
 
-void BufferGL::usingDefaultStoredData(bool needDefaultStoredData)
-{
+void BufferGL::usingDefaultStoredData(bool needDefaultStoredData) {
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     _needDefaultStoredData = needDefaultStoredData;
 #endif
 }
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
-void BufferGL::reloadBuffer()
-{
+void BufferGL::reloadBuffer() {
+    if (_buffer) {
+        glDeleteBuffers(1, &_buffer);
+    }
     glGenBuffers(1, &_buffer);
 
-    if(!_needDefaultStoredData)
-        return;
+    if (!_needDefaultStoredData) return;
 
-    _bufferAlreadyFilled = true;
-    updateData(_data, _bufferAllocated);
+    if (_data && _bufferAllocated > 0) {
+        _bufferAlreadyFilled = true;
+        updateData(_data, _bufferAllocated);
+    }
 }
 
-void BufferGL::fillBuffer(void* data, std::size_t offset, std::size_t size)
-{
-    if(_bufferAlreadyFilled || !_needDefaultStoredData || BufferUsage::STATIC != _usage)
-        return;
+void BufferGL::fillBuffer(void* data, std::size_t offset, std::size_t size) {
+    if (!_needDefaultStoredData || BufferUsage::STATIC != _usage) return;
 
-    if(_data == nullptr)
-    {
+    if (!_data) {
         _data = new (std::nothrow) char[_bufferAllocated];
     }
 
     memcpy(_data + offset, data, size);
-
 }
 #endif
 
-void BufferGL::updateData(void* data, std::size_t size)
-{
-    assert(size && size <= _size);
-    
-    if (_buffer)
-    {
-        if (BufferType::VERTEX == _type)
-        {
-            glBindBuffer(GL_ARRAY_BUFFER, _buffer);
-            glBufferData(GL_ARRAY_BUFFER, size, data, toGLUsage(_usage));
-        }
-        else
-        {
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _buffer);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, size, data, toGLUsage(_usage));
-        }
-        CHECK_GL_ERROR_DEBUG();
+void BufferGL::updateData(void* data, std::size_t size) {
+    assert(size > 0 && size <= _size);
+
+    if (_buffer) {
+        GLenum bufferType = (BufferType::VERTEX == _type) ? GL_ARRAY_BUFFER : GL_ELEMENT_ARRAY_BUFFER;
+        glBindBuffer(bufferType, _buffer);
+        glBufferData(bufferType, size, data, toGLUsage(_usage));
+
         _bufferAllocated = size;
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
@@ -129,30 +110,18 @@ void BufferGL::updateData(void* data, std::size_t size)
     }
 }
 
-void BufferGL::updateSubData(void* data, std::size_t offset, std::size_t size)
-{
-
-    CCASSERT(_bufferAllocated != 0, "updateData should be invoke before updateSubData");
+void BufferGL::updateSubData(void* data, std::size_t offset, std::size_t size) {
+    CCASSERT(_bufferAllocated != 0, "updateData should be invoked before updateSubData");
     CCASSERT(offset + size <= _bufferAllocated, "buffer size overflow");
- 
-    if (_buffer)
-    {
-        CHECK_GL_ERROR_DEBUG();
-        if (BufferType::VERTEX == _type)
-        {
-            glBindBuffer(GL_ARRAY_BUFFER, _buffer);
-            glBufferSubData(GL_ARRAY_BUFFER, offset, size, data);
-        }
-        else
-        {
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _buffer);
-            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset, size, data);
-        }
+
+    if (_buffer) {
+        GLenum bufferType = (BufferType::VERTEX == _type) ? GL_ARRAY_BUFFER : GL_ELEMENT_ARRAY_BUFFER;
+        glBindBuffer(bufferType, _buffer);
+        glBufferSubData(bufferType, offset, size, data);
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
         fillBuffer(data, offset, size);
 #endif
-        CHECK_GL_ERROR_DEBUG();
     }
 }
 
