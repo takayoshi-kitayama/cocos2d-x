@@ -40,35 +40,43 @@ ShaderModuleGL::~ShaderModuleGL()
     deleteShader();
 }
 
-void ShaderModuleGL::compileShader(ShaderStage stage, const std::string &source)
+void ShaderModuleGL::compileShader(ShaderStage stage, const std::string& source)
 {
     GLenum shaderType = stage == ShaderStage::VERTEX ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER;
-    const GLchar* sourcePtr = reinterpret_cast<const GLchar*>(source.c_str());
+    const GLchar* sourcePtr = source.c_str();
     _shader = glCreateShader(shaderType);
+
     if (!_shader)
         return;
-    
+
     glShaderSource(_shader, 1, &sourcePtr, nullptr);
     glCompileShader(_shader);
-    
+
     GLint status = 0;
     glGetShaderiv(_shader, GL_COMPILE_STATUS, &status);
-    if (! status)
+
+    if (!status)
     {
+        std::string errorLog = getErrorLog(_shader);
         CCLOG("cocos2d: ERROR: Failed to compile shader:\n%s", source.c_str());
-        CCLOG("cocos2d: %s", getErrorLog(_shader));
+        CCLOG("cocos2d: %s", errorLog.c_str());
         deleteShader();
         CCASSERT(false, "Shader compile failed!");
     }
 }
 
-char* ShaderModuleGL::getErrorLog(GLuint shader) const
+std::string ShaderModuleGL::getErrorLog(GLuint shader) const
 {
     GLint logLength = 0;
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
-    char* log = (char*)malloc(sizeof(char) * logLength);
-    glGetShaderInfoLog(shader, logLength, nullptr, log);
-    return log;
+    
+    if (logLength <= 0)
+        return "No error log available.";
+
+    std::vector<char> log(logLength);
+    glGetShaderInfoLog(shader, logLength, nullptr, log.data());
+    
+    return std::string(log.data());
 }
 
 void ShaderModuleGL::deleteShader()

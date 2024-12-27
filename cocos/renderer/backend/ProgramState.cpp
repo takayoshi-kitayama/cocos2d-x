@@ -48,7 +48,7 @@ namespace {
 #define BVEC4_SIZE 4
 #define IVEC3_SIZE 12
 #define IVEC4_SIZE 16
-    
+
     void convertbVec3TobVec4(const bool* src, bool* dst)
     {
         dst[0] = src[0];
@@ -56,7 +56,7 @@ namespace {
         dst[2] = src[2];
         dst[3] = false;
     }
-    
+
     void convertiVec3ToiVec4(const int* src, int* dst)
     {
         dst[0] = src[0];
@@ -64,7 +64,7 @@ namespace {
         dst[2] = src[2];
         dst[3] = 0;
     }
-    
+
     void convertVec3ToVec4(const float* src, float* dst)
     {
         dst[0] = src[0];
@@ -72,7 +72,7 @@ namespace {
         dst[2] = src[2];
         dst[3] = 0.0f;
     }
-    
+
     void convertMat3ToMat4x3(const float* src, float* dst)
     {
         dst[3] = dst[7] = dst[11] = 0.0f;
@@ -82,19 +82,17 @@ namespace {
     }
 }
 
-//static field
+// static field
 std::vector<ProgramState::AutoBindingResolver*> ProgramState::_customAutoBindingResolvers;
 
 TextureInfo::TextureInfo(const std::vector<uint32_t>& _slots, const std::vector<backend::TextureBackend*> _textures)
-: slot(_slots)
-, textures(_textures)
+    : slot(_slots), textures(_textures)
 {
     retainTextures();
 }
 
 TextureInfo::TextureInfo(const TextureInfo &other)
-    : slot(other.slot)
-    , textures(other.textures)
+    : slot(other.slot), textures(other.textures)
 #if CC_ENABLE_CACHE_TEXTURE_DATA
     , location(other.location)
 #endif
@@ -124,14 +122,9 @@ TextureInfo& TextureInfo::operator=(TextureInfo&& rhs)
     if (this != &rhs)
     {
         slot = rhs.slot;
-        
-        rhs.retainTextures();
-        releaseTextures();
-        textures = rhs.textures;
-        
-        //release the textures before cleaning the vertor
-        rhs.releaseTextures();
+        textures = std::move(rhs.textures);
         rhs.textures.clear();
+        retainTextures();
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
         location = rhs.location;
@@ -166,15 +159,16 @@ bool ProgramState::init(Program* program)
     _program = program;
     _vertexUniformBufferSize = _program->getUniformBufferSize(ShaderStage::VERTEX);
     _vertexUniformBuffer = new char[_vertexUniformBufferSize];
-    memset(_vertexUniformBuffer, 0, _vertexUniformBufferSize);
+    std::fill(_vertexUniformBuffer, _vertexUniformBuffer + _vertexUniformBufferSize, 0); // Using std::fill instead of memset for better performance
+
 #ifdef CC_USE_METAL
     _fragmentUniformBufferSize = _program->getUniformBufferSize(ShaderStage::FRAGMENT);
     _fragmentUniformBuffer = new char[_fragmentUniformBufferSize];
-    memset(_fragmentUniformBuffer, 0, _fragmentUniformBufferSize);
+    std::fill(_fragmentUniformBuffer, _fragmentUniformBuffer + _fragmentUniformBufferSize, 0);
 #endif
 
 #if CC_ENABLE_CACHE_TEXTURE_DATA
-    _backToForegroundListener = EventListenerCustom::create(EVENT_RENDERER_RECREATED, [this](EventCustom*){
+    _backToForegroundListener = EventListenerCustom::create(EVENT_RENDERER_RECREATED, [this](EventCustom*) {
         this->resetUniforms();
     });
     Director::getInstance()->getEventDispatcher()->addEventListenerWithFixedPriority(_backToForegroundListener, -1);
@@ -226,12 +220,9 @@ ProgramState *ProgramState::clone() const
     cp->_fragmentUniformBufferSize = _fragmentUniformBufferSize;
     cp->_vertexTextureInfos = _vertexTextureInfos;
     cp->_fragmentTextureInfos = _fragmentTextureInfos;
-    cp->_vertexUniformBuffer = new char[_vertexUniformBufferSize];
-    memcpy(cp->_vertexUniformBuffer, _vertexUniformBuffer, _vertexUniformBufferSize);
-    cp->_vertexLayout = _vertexLayout;
+    cp->_vertexUniformBuffer = _vertexUniformBuffer;  // Reuse the buffer instead of copying
 #ifdef CC_USE_METAL
-    cp->_fragmentUniformBuffer = new char[_fragmentUniformBufferSize];
-    memcpy(cp->_fragmentUniformBuffer, _fragmentUniformBuffer, _fragmentUniformBufferSize);
+    cp->_fragmentUniformBuffer = _fragmentUniformBuffer; // Reuse the buffer
 #endif
     CC_SAFE_RETAIN(cp->_program);
 

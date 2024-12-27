@@ -24,27 +24,38 @@
  
 #include "BufferManager.h"
 #include "BufferMTL.h"
+#include <unordered_set>
 
 CC_BACKEND_BEGIN
 
-std::vector<BufferMTL*> BufferManager::_buffers;
+// Use an unordered_set for efficient management of buffers
+std::unordered_set<BufferMTL*> BufferManager::_buffers;
 
 void BufferManager::addBuffer(BufferMTL* buffer)
 {
-    _buffers.push_back(buffer);
+    if (buffer)
+    {
+        _buffers.insert(buffer); // Insert buffer efficiently
+    }
 }
 
 void BufferManager::removeBuffer(BufferMTL* buffer)
 {
-    auto iter = std::find(_buffers.begin(), _buffers.end(), buffer);
-    if (_buffers.end() != iter)
-        _buffers.erase(iter);
+    if (buffer)
+    {
+        _buffers.erase(buffer); // Erase buffer directly
+    }
 }
 
 void BufferManager::beginFrame()
 {
     for (auto& buffer : _buffers)
-        buffer->beginFrame();
+    {
+        if (buffer) // Ensure the buffer is valid
+        {
+            buffer->beginFrame(); // Update frame-specific state
+        }
+    }
 }
 
 CC_BACKEND_END

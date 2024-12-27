@@ -222,44 +222,44 @@ CommandBufferMTL::~CommandBufferMTL()
     dispatch_semaphore_signal(_frameBoundarySemaphore);
 }
 
-void CommandBufferMTL::beginFrame()
-{
+void CommandBufferMTL::beginFrame() {
+    // init auto release pool
     _autoReleasePool = [[NSAutoreleasePool alloc] init];
+
+    // Wait until the inflight GPU command buffer has completed
     dispatch_semaphore_wait(_frameBoundarySemaphore, DISPATCH_TIME_FOREVER);
 
     _mtlCommandBuffer = [_mtlCommandQueue commandBuffer];
     [_mtlCommandBuffer enqueue];
-    [_mtlCommandBuffer retain];
 
     BufferManager::beginFrame();
+
+    // Reset render encoder
+    if (!_mtlRenderEncoder) {
+        _mtlRenderEncoder = nil;
+    }
 }
 
-id<MTLRenderCommandEncoder> CommandBufferMTL::getRenderCommandEncoder(const RenderPassDescriptor& renderPassDescriptor)
-{
-    if(_mtlRenderEncoder != nil && _prevRenderPassDescriptor == renderPassDescriptor)
-    {
-        return _mtlRenderEncoder;
+id<MTLRenderCommandEncoder> CommandBufferMTL::getRenderCommandEncoder(const RenderPassDescriptor& renderPassDescriptor) {
+    if (_mtlRenderEncoder && _prevRenderPassDescriptor == renderPassDescriptor) {
+        return _mtlRenderEncoder; // if the render pass descriptor is the same, reuse the previous encoder
     }
-    else
-    {
-        _prevRenderPassDescriptor = renderPassDescriptor;
-    }
-    
-    if(_mtlRenderEncoder != nil)
-    {
+
+    // end previous render encoder
+    if (_mtlRenderEncoder) {
         [_mtlRenderEncoder endEncoding];
-        [_mtlRenderEncoder release];
         _mtlRenderEncoder = nil;
     }
 
+    // enable frame buffer only mode
+    _prevRenderPassDescriptor = renderPassDescriptor;
     auto mtlDescriptor = toMTLRenderPassDescriptor(renderPassDescriptor);
-    _renderTargetWidth = (unsigned int)mtlDescriptor.colorAttachments[0].texture.width;
-    _renderTargetHeight = (unsigned int)mtlDescriptor.colorAttachments[0].texture.height;
-    id<MTLRenderCommandEncoder> mtlRenderEncoder = [_mtlCommandBuffer renderCommandEncoderWithDescriptor:mtlDescriptor];
-    [mtlRenderEncoder retain];
-    
-    return mtlRenderEncoder;
+
+    // create render encoder
+    _mtlRenderEncoder = [_mtlCommandBuffer renderCommandEncoderWithDescriptor:mtlDescriptor];
+    return _mtlRenderEncoder;
 }
+
 
 void CommandBufferMTL::beginRenderPass(const RenderPassDescriptor& descriptor)
 {
@@ -354,23 +354,19 @@ void CommandBufferMTL::captureScreen(std::function<void(const unsigned char*, in
     }];
 }
 
-void CommandBufferMTL::endFrame()
-{
-    [_mtlRenderEncoder endEncoding];
-    [_mtlRenderEncoder release];
-    _mtlRenderEncoder = nil;
-    
+void CommandBufferMTL::endFrame() {
+    // エンコーダ終了処理の統一化
+    if (_mtlRenderEncoder) {
+        [_mtlRenderEncoder endEncoding];
+        _mtlRenderEncoder = nil;
+    }
+
     [_mtlCommandBuffer presentDrawable:DeviceMTL::getCurrentDrawable()];
-    _drawableTexture = DeviceMTL::getCurrentDrawable().texture;
     [_mtlCommandBuffer addCompletedHandler:^(id<MTLCommandBuffer> commandBuffer) {
-        // GPU work is complete
-        // Signal the semaphore to start the CPU work
         dispatch_semaphore_signal(_frameBoundarySemaphore);
     }];
 
     [_mtlCommandBuffer commit];
-    [_mtlCommandBuffer release];
-    DeviceMTL::resetCurrentDrawable();
     [_autoReleasePool drain];
 }
 

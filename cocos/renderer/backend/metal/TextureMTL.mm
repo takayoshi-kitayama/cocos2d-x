@@ -344,14 +344,13 @@ void TextureMTL::getBytes(std::size_t x, std::size_t y, std::size_t width, std::
 
 void TextureMTL::generateMipmaps()
 {
-    if (TextureUsage::RENDER_TARGET == _textureUsage || isColorRenderable(_textureFormat) == false)
+    if (TextureUsage::RENDER_TARGET == _textureUsage || isColorRenderable(_textureFormat) == false || !_mtlTexture)
         return;
     
     if(!_hasMipmaps)
     {
         _hasMipmaps = true;
         Utils::generateMipmaps(_mtlTexture);
-        
     }
 }
 
@@ -478,7 +477,7 @@ void TextureCubeMTL::getBytes(std::size_t x, std::size_t y, std::size_t width, s
 
 void TextureCubeMTL::generateMipmaps()
 {
-    if (TextureUsage::RENDER_TARGET == _textureUsage || isColorRenderable(_textureFormat) == false)
+    if (TextureUsage::RENDER_TARGET == _textureUsage || isColorRenderable(_textureFormat) == false || !_mtlTexture)
         return;
     
     if(!_hasMipmaps)
@@ -487,5 +486,4 @@ void TextureCubeMTL::generateMipmaps()
         Utils::generateMipmaps(_mtlTexture);
     }
 }
-
 CC_BACKEND_END

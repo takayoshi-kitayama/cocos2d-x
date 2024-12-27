@@ -29,66 +29,56 @@
 
 CC_BACKEND_BEGIN
 
+namespace {
+    // Singleton glslopt context for reuse
+    glslopt_ctx* sharedGlslOptCtx() {
+        static glslopt_ctx* ctx = glslopt_initialize(kGlslTargetMetal);
+        return ctx;
+    }
+}
+
 ShaderModuleMTL::ShaderModuleMTL(id<MTLDevice> mtlDevice, ShaderStage stage, const std::string& source)
 : ShaderModule(stage)
 {
-    // Convert GLSL shader to metal shader
-    //TODO: don't crreate/destroy ctx every time.
-    glslopt_ctx* ctx = glslopt_initialize(kGlslTargetMetal);
+    // Reuse GLSL optimizer context
+    glslopt_ctx* ctx = sharedGlslOptCtx();
     glslopt_shader_type shaderType = stage == ShaderStage::VERTEX ? kGlslOptShaderVertex : kGlslOptShaderFragment;
     glslopt_shader* glslShader = glslopt_optimize(ctx, shaderType, source.c_str(), 0);
-    if (!glslShader)
-    {
-        NSLog(@"Can not translate GLSL shader to metal shader:");
-        NSLog(@"%s", source.c_str());
+
+    if (!glslShader || !glslopt_get_output(glslShader)) {
+        NSLog(@"Failed to translate GLSL shader to Metal: %s", source.c_str());
+        if (glslShader) glslopt_shader_delete(glslShader);
         return;
     }
-    
+
     const char* metalShader = glslopt_get_output(glslShader);
-    if (!metalShader)
-    {
-        NSLog(@"Can not get metal shader:");
-        NSLog(@"%s", source.c_str());
-        glslopt_cleanup(ctx);
-        return;
-    }
-    
-//    NSLog(@"%s", metalShader);
-    
+
     parseAttibute(mtlDevice, glslShader);
     parseUniform(mtlDevice, glslShader);
     parseTexture(mtlDevice, glslShader);
     setBuiltinUniformLocation();
     setBuiltinAttributeLocation();
-    
+
+    NSError* error = nil;
     NSString* shader = [NSString stringWithUTF8String:metalShader];
-    NSError* error;
-    id<MTLLibrary> library = [mtlDevice newLibraryWithSource:shader
-                                                     options:nil
-                                                       error:&error];
-    if (!library)
-    {
-        NSLog(@"Can not compile metal shader: %@", error);
-        NSLog(@"%s", metalShader);
+    id<MTLLibrary> library = [mtlDevice newLibraryWithSource:shader options:nil error:&error];
+    if (!library) {
+        NSLog(@"Failed to compile Metal shader: %@", error);
+        NSLog(@"Metal shader source:\n%s", metalShader);
         glslopt_shader_delete(glslShader);
-        glslopt_cleanup(ctx);
         return;
     }
-    
-    if (ShaderStage::VERTEX == stage)
-        _mtlFunction = [library newFunctionWithName:@"xlatMtlMain1"];
-    else
-        _mtlFunction = [library newFunctionWithName:@"xlatMtlMain2"];
-    if (!_mtlFunction)
-    {
-        NSLog(@"metal shader is ---------------");
-        NSLog(@"%s", metalShader);
+
+    _mtlFunction = stage == ShaderStage::VERTEX ? [library newFunctionWithName:@"xlatMtlMain1"] : [library newFunctionWithName:@"xlatMtlMain2"];
+    if (!_mtlFunction) {
+        NSLog(@"Error in Metal shader function creation:\n%s", metalShader);
+        [library release];
+        glslopt_shader_delete(glslShader);
         assert(false);
     }
-    
-    glslopt_shader_delete(glslShader);
-    glslopt_cleanup(ctx);
+
     [library release];
+    glslopt_shader_delete(glslShader);
 }
 
 ShaderModuleMTL::~ShaderModuleMTL()
@@ -99,17 +89,14 @@ ShaderModuleMTL::~ShaderModuleMTL()
 void ShaderModuleMTL::parseAttibute(id<MTLDevice> mtlDevice, glslopt_shader* shader)
 {
     const int attributeCount = glslopt_shader_get_input_count(shader);
-    for(int i = 0; i < attributeCount; i++)
-    {
+    for (int i = 0; i < attributeCount; ++i) {
         const char* parName;
         glslopt_basic_type parType;
         glslopt_precision parPrec;
         int parVecSize, parMatSize, parArrSize, location;
-         glslopt_shader_get_input_desc(shader, i, &parName, &parType, &parPrec, &parVecSize, &parMatSize, &parArrSize, &location);
-        
-        AttributeBindInfo attributeInfo;
-        attributeInfo.attributeName = parName;
-        attributeInfo.location = location;
+        glslopt_shader_get_input_desc(shader, i, &parName, &parType, &parPrec, &parVecSize, &parMatSize, &parArrSize, &location);
+
+        AttributeBindInfo attributeInfo = { parName, location };
         _attributeInfo[parName] = attributeInfo;
     }
 }
@@ -118,39 +105,30 @@ void ShaderModuleMTL::parseUniform(id<MTLDevice> mtlDevice, glslopt_shader* shad
 {
     const int uniformCount = glslopt_shader_get_uniform_count(shader);
     _uniformBufferSize = glslopt_shader_get_uniform_total_size(shader);
-    
-    for (int i = 0; i < uniformCount; ++i)
-    {
-        int nextLocation = -1;
+
+    for (int i = 0; i < uniformCount; ++i) {
         const char* parName;
         glslopt_basic_type parType;
         glslopt_precision parPrec;
-        int parVecSize, parMatSize, parArrSize, location;
-        if( i+1 < uniformCount)
-        {
-            glslopt_shader_get_uniform_desc(shader, i+1, &parName, &parType, &parPrec, &parVecSize, &parMatSize, &parArrSize, &location);
-            nextLocation = location;
-        }
-        else
-        {
-            nextLocation = static_cast<int>(_uniformBufferSize);
-        }
-        
+        int parVecSize, parMatSize, parArrSize, location, nextLocation;
+
         glslopt_shader_get_uniform_desc(shader, i, &parName, &parType, &parPrec, &parVecSize, &parMatSize, &parArrSize, &location);
-        
-        parArrSize = (parArrSize > 0) ? parArrSize : 1;
-        UniformInfo uniform;
-        uniform.count = parArrSize;
-        uniform.location = location;
-        uniform.isArray = parArrSize;
-        uniform.size = nextLocation - location;
-        uniform.bufferOffset = location;
-        uniform.needConvert = (parVecSize == 3) ? true : false;
-        uniform.type = static_cast<unsigned int>(parType);
-        uniform.isMatrix = (parMatSize > 1) ? true : false;
+        nextLocation = (i + 1 < uniformCount) ? glslopt_shader_get_uniform_offset(shader, i + 1) : static_cast<int>(_uniformBufferSize);
+
+        UniformInfo uniform = {
+            static_cast<unsigned int>(parType),
+            parArrSize > 0,
+            parVecSize == 3,
+            parMatSize > 1,
+            parArrSize,
+            location,
+            nextLocation - location,
+            location
+        };
+
         _uniformInfos[parName] = uniform;
         _activeUniformInfos[location] = uniform;
-        _maxLocation = _maxLocation < location ? (location + 1) : _maxLocation;
+        _maxLocation = std::max(_maxLocation, location + 1);
     }
 }
 
