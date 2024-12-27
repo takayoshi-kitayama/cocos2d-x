@@ -79,34 +79,41 @@ FontAtlas::FontAtlas(Font &theFont)
 
 void FontAtlas::reinit()
 {
+    // release page datas.
     if (_currentPageData)
     {
-        delete []_currentPageData;
+        delete[] _currentPageData;
         _currentPageData = nullptr;
     }
-    
-    CC_SAFE_DELETE_ARRAY(_currentPageDataRGBA);
-    
+
+    if (_currentPageDataRGBA)
+    {
+        delete[] _currentPageDataRGBA;
+        _currentPageDataRGBA = nullptr;
+    }
+
+    // init texture2d.
     auto texture = new (std::nothrow) Texture2D;
-    
+
+    // setup page size.
     _currentPageDataSize = CacheTextureWidth * CacheTextureHeight;
-    
+
     auto outlineSize = _fontFreeType->getOutlineSize();
-    if(outlineSize > 0)
+    if (outlineSize > 0)
     {
         _currentPageDataSize *= 2;
-        
         _currentPageDataSizeRGBA = _currentPageDataSize * 2;
+
         _currentPageDataRGBA = new (std::nothrow) unsigned char[_currentPageDataSizeRGBA];
         memset(_currentPageDataRGBA, 0, _currentPageDataSizeRGBA);
     }
-    
+
     _currentPageData = new (std::nothrow) unsigned char[_currentPageDataSize];
     memset(_currentPageData, 0, _currentPageDataSize);
-    
-    initTextureWithZeros(texture);
 
-    addTexture(texture,0);
+    // init texture with empty data.
+    initTextureWithZeros(texture);
+    addTexture(texture, 0);
     texture->release();
 }
 
@@ -173,9 +180,10 @@ void FontAtlas::reset()
 
 void FontAtlas::releaseTextures()
 {
-    for( auto &item: _atlasTextures)
-    {
-        item.second->release();
+    for (auto &item : _atlasTextures) {
+        if (item.second) {
+            item.second->release();
+        }
     }
     _atlasTextures.clear();
 }
@@ -498,7 +506,19 @@ void FontAtlas::updateTextureContent(backend::PixelFormat format, int startY)
 
 void FontAtlas::addTexture(Texture2D *texture, int slot)
 {
+    if (!texture)
+    {
+        CCLOG("Invalid texture passed to addTexture");
+        return;
+    }
+
     texture->retain();
+    auto existingTexture = _atlasTextures.find(slot);
+    if (existingTexture != _atlasTextures.end())
+    {
+        existingTexture->second->release();
+    }
+
     _atlasTextures[slot] = texture;
 }
 

@@ -40,13 +40,12 @@ std::unordered_map<std::string, FontAtlas *> FontAtlasCache::_atlasMap;
 
 void FontAtlasCache::purgeCachedData()
 {
-    auto atlasMapCopy = _atlasMap;
-    for (auto&& atlas : atlasMapCopy)
-    {
-        auto refCount = atlas.second->getReferenceCount();
-        atlas.second->release();
-        if (refCount != 1)
+    for (auto&& atlas : _atlasMap) {
+        if (atlas.second != nullptr) {
             atlas.second->purgeTexturesAtlas();
+            atlas.second->release(); // Decrease reference count
+            atlas.second = nullptr; // Prevent dangling pointers
+        }
     }
     _atlasMap.clear();
 }
@@ -235,24 +234,19 @@ FontAtlas* FontAtlasCache::getFontAtlasCharMap(const std::string& charMapFile, i
 
 bool FontAtlasCache::releaseFontAtlas(FontAtlas *atlas)
 {
-    if (nullptr != atlas)
-    {
-        for( auto &item: _atlasMap )
-        {
-            if ( item.second == atlas )
-            {
-                if (atlas->getReferenceCount() == 1)
-                {
-                  _atlasMap.erase(item.first);
+    if (atlas != nullptr) {
+        for (auto it = _atlasMap.begin(); it != _atlasMap.end(); ++it) {
+            if (it->second == atlas) {
+                if (atlas->getReferenceCount() == 1) {
+                    CC_SAFE_RELEASE_NULL(atlas); // Release and nullify
+                    _atlasMap.erase(it);
+                } else {
+                    atlas->release(); // Decrease reference count only
                 }
-                
-                atlas->release();
-                
                 return true;
             }
         }
     }
-    
     return false;
 }
 
@@ -262,21 +256,20 @@ void FontAtlasCache::reloadFontAtlasFNT(const std::string& fontFileName, const R
     snprintf(keyPrefix, ATLAS_MAP_KEY_PREFIX_BUFFER_SIZE, "%.2f %.2f ", imageRect.origin.x, imageRect.origin.y);
     std::string atlasName(keyPrefix);
     atlasName += fontFileName;
-    
+
     auto it = _atlasMap.find(atlasName);
-    if (it != _atlasMap.end())
-    {
-        CC_SAFE_RELEASE_NULL(it->second);
+    if (it != _atlasMap.end()) {
+        CC_SAFE_RELEASE_NULL(it->second); // Safely release and nullify
         _atlasMap.erase(it);
     }
+
     FontFNT::reloadBMFontResource(fontFileName);
+
     auto font = FontFNT::create(fontFileName, imageRect, imageRotated);
-    if (font)
-    {
+    if (font) {
         auto tempAtlas = font->createFontAtlas();
-        if (tempAtlas)
-        {
-            _atlasMap[atlasName] = tempAtlas;
+        if (tempAtlas) {
+            _atlasMap[atlasName] = tempAtlas; // Add the new atlasz
         }
     }
 }
